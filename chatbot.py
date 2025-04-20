@@ -1,378 +1,269 @@
-import spacy
-from spacy.training import Example
-import random
-import requests
-import warnings
 import json
-warnings.filterwarnings("ignore", category=UserWarning)
+import random
+import spacy
 
-# === Dataset Generation ===
+# Load spaCy model
+nlp = spacy.load("./gym_ner_model_v5")
 
-TRAIN_DATA = [
-    ("i’m new to working out and want to make my arms stronger.", {"entities": [(0, 3, "EXPERIENCE"), (30, 34, "BODY_PART"), (44, 52, "GOAL")]}),
-    ("i’ve never exercised and want something for my legs at home.", {"entities": [(0, 6, "EXPERIENCE"), (33, 37, "BODY_PART"), (41, 45, "EQUIPMENT")]}),
-    ("can you suggest an easy workout for my stomach to get in shape?", {"entities": [(10, 14, "EXPERIENCE"), (30, 37, "BODY_PART"), (41, 52, "GOAL")]}),
-    ("i want to feel more fit and exercise with dumbbells.", {"entities": [(5, 17, "GOAL"), (35, 44, "EQUIPMENT")]}),
-    ("i’m a beginner and want my back to look better at the gym.", {"entities": [(0, 8, "EXPERIENCE"), (21, 25, "BODY_PART"), (29, 39, "GOAL"), (43, 46, "EQUIPMENT")]}),
-    ("never done this before, but i want to work out my whole body.", {"entities": [(0, 5, "EXPERIENCE"), (40, 50, "BODY_PART")]}),
-    ("i want something simple for my legs to not feel so tired.", {"entities": [(10, 16, "EXPERIENCE"), (26, 30, "BODY_PART"), (34, 50, "GOAL")]}),
-    ("just starting out and want to tone my arms at home.", {"entities": [(0, 12, "EXPERIENCE"), (21, 25, "GOAL"), (29, 33, "BODY_PART"), (37, 41, "EQUIPMENT")]}),
-    ("i don’t know how to start but want my stomach stronger.", {"entities": [(2, 17, "EXPERIENCE"), (29, 36, "BODY_PART"), (37, 45, "GOAL")]}),
-    ("can i get a workout for my chest with a barbell to build muscle?", {"entities": [(22, 27, "BODY_PART"), (33, 40, "EQUIPMENT"), (44, 55, "GOAL")]}),
-    ("hey, i’m new to the gym and want to get stronger.", {"entities": [(5, 8, "EXPERIENCE"), (10, 17, "EQUIPMENT"), (28, 39, "GOAL")]}),
-    ("i want to work out at the gym to tone my legs.", {"entities": [(17, 24, "EQUIPMENT"), (26, 30, "GOAL"), (34, 38, "BODY_PART")]}),
-    ("i’m starting out at the gym to build muscle.", {"entities": [(0, 3, "EXPERIENCE"), (15, 22, "EQUIPMENT"), (23, 34, "GOAL")]}),
-    ("can you suggest a gym workout for beginners?", {"entities": [(10, 13, "EQUIPMENT"), (24, 33, "EXPERIENCE")]}),
-    ("i want a gym workout to tone my arms.", {"entities": [(4, 7, "EQUIPMENT"), (11, 15, "GOAL"), (19, 23, "BODY_PART")]}),
-    ("i’ve never been to the gym but want stronger arms.", {"entities": [(0, 6, "EXPERIENCE"), (10, 17, "EQUIPMENT"), (23, 31, "GOAL"), (32, 36, "BODY_PART")]}),
-    ("never exercised, want to tone my legs at the gym.", {"entities": [(0, 5, "EXPERIENCE"), (17, 21, "GOAL"), (25, 29, "BODY_PART"), (33, 40, "EQUIPMENT")]}),
-    ("i’m advanced and want muscle gain in my chest at the gym 3 days a week.", {"entities": [(0, 8, "EXPERIENCE"), (17, 27, "GOAL"), (31, 36, "BODY_PART"), (40, 43, "EQUIPMENT"), (44, 57, "FREQUENCY")]}),
-    ("i want to lose weight by working my whole body at home 4 days per week.", {"entities": [(5, 15, "GOAL"), (26, 36, "BODY_PART"), (40, 44, "EQUIPMENT"), (45, 59, "FREQUENCY")]}),
-    ("advanced lifter here, aiming for weight loss with dumbbells 5 days a week.", {"entities": [(0, 8, "EXPERIENCE"), (20, 30, "GOAL"), (36, 45, "EQUIPMENT"), (46, 60, "FREQUENCY")]}),
-    ("i don’t know what to do but i want my arms to get stronger.", {"entities": [(26, 30, "BODY_PART"), (34, 45, "GOAL")]}),
-    ("can you suggest something for my legs?", {"entities": [(19, 23, "BODY_PART")]}),
-    ("i’m advanced and want muscle gain in my arms at the gym.", {"entities": [(0, 8, "EXPERIENCE"), (17, 27, "GOAL"), (31, 35, "BODY_PART"), (39, 42, "EQUIPMENT")]}),
-    ("beginner here, want weight loss with no equipment 4 days a week.", {"entities": [(0, 8, "EXPERIENCE"), (14, 24, "GOAL"), (30, 42, "EQUIPMENT"), (43, 57, "FREQUENCY")]}),
-    ("i want muscle gain for my chest.", {"entities": [(2, 12, "GOAL"), (17, 22, "BODY_PART")]}),
-    ("i’m new and want weight loss at home.", {"entities": [(0, 3, "EXPERIENCE"), (11, 21, "GOAL"), (25, 29, "EQUIPMENT")]}),
-    ("advanced user, aiming for chest muscle gain 3 days a week.", {"entities": [(0, 8, "EXPERIENCE"), (20, 25, "BODY_PART"), (26, 36, "GOAL"), (37, 50, "FREQUENCY")]}),
-    ("i want to work my whole body for weight loss.", {"entities": [(12, 22, "BODY_PART"), (27, 37, "GOAL")]}),
-    ("i can do 3 days a week for my legs.", {"entities": [(4, 17, "FREQUENCY"), (22, 26, "BODY_PART")]}),
-    ("i don’t know what to gain but want my chest stronger.", {"entities": [(30, 35, "BODY_PART"), (36, 44, "GOAL")]}),
-    ("i want muscle gain in my Chest.", {"entities": [(2, 12, "GOAL"), (17, 22, "BODY_PART")]}),
-    ("my goal is muscle gain at the Gym.", {"entities": [(7, 17, "GOAL"), (22, 25, "EQUIPMENT")]}),
-    ("Chest workouts at gym for muscle gain.", {"entities": [(0, 5, "BODY_PART"), (10, 13, "EQUIPMENT"), (18, 28, "GOAL")]}),
-    ("i’m advanced, want my chest to grow at the gym.", {"entities": [(0, 8, "EXPERIENCE"), (14, 19, "BODY_PART"), (23, 27, "GOAL"), (31, 34, "EQUIPMENT")]}),
-    ("3 days a week for chest muscle gain.", {"entities": [(0, 13, "FREQUENCY"), (18, 23, "BODY_PART"), (24, 34, "GOAL")]}),
-    ("i want muscle gain for chest at gym.", {"entities": [(2, 12, "GOAL"), (17, 22, "BODY_PART"), (26, 29, "EQUIPMENT")]}),
-    ("muscle gain is my goal at the gym.", {"entities": [(0, 10, "GOAL"), (23, 26, "EQUIPMENT")]}),
-    ("i’m advanced, muscle gain in chest at the gym.", {"entities": [(0, 8, "EXPERIENCE"), (10, 20, "GOAL"), (24, 29, "BODY_PART"), (33, 36, "EQUIPMENT")]}),
-    ("at the gym for chest workouts.", {"entities": [(0, 6, "EQUIPMENT"), (11, 16, "BODY_PART")]}),
-    ("working out at gym to gain muscle.", {"entities": [(11, 14, "EQUIPMENT"), (18, 28, "GOAL")]}),
-    ("at gym, i want chest strength.", {"entities": [(0, 6, "EQUIPMENT"), (14, 19, "BODY_PART"), (20, 28, "GOAL")]}),
-]
-
-# Lowercase training data
-TRAIN_DATA = [(text.lower(), annotations) for text, annotations in TRAIN_DATA]
-
-templates = [
-    "i’m {EXPERIENCE} and want to {GOAL} my {BODY_PART} with {EQUIPMENT} {FREQUENCY}.",
-    "can you suggest something {EXPERIENCE} for my {BODY_PART} to {GOAL} {FREQUENCY}?",
-    "i want to {GOAL} and exercise my {BODY_PART} at {EQUIPMENT} {FREQUENCY}.",
-    "{EXPERIENCE} here, looking to {GOAL} with {EQUIPMENT} for my {BODY_PART}.",
-    "never done this, but i want my {BODY_PART} to {GOAL} {FREQUENCY}."
-]
-
-experience_terms = ["new", "beginner", "never", "just starting", "don’t know how", "first time", "starting out", "no experience", "easy", "advanced"]
-goal_terms = ["get stronger", "look better", "feel more fit", "tone", "build muscle", "get in shape", "move better", "not feel so tired", "stronger", "not feel so weak", "weight loss", "muscle gain"]
-body_part_terms = ["arms", "legs", "stomach", "back", "whole body", "chest", "tummy", "core"]
-equipment_terms = ["home", "dumbbells", "barbell", "gym", "no equipment", "kettlebell", "none"]
-frequency_terms = ["3 days a week", "4 days per week", "5 days a week", "twice a week", "every day"]
-
-temp_nlp = spacy.blank("en")
-
-def generate_training_data(n_samples=110):
-    data = []
-    for _ in range(n_samples):
-        template = random.choice(templates)
-        experience = random.choice(experience_terms)
-        goal = random.choice(goal_terms)
-        body_part = random.choice(body_part_terms)
-        equipment = random.choice(equipment_terms)
-        frequency = random.choice(frequency_terms)
-        
-        text = template.format(EXPERIENCE=experience, GOAL=goal, BODY_PART=body_part, EQUIPMENT=equipment, FREQUENCY=frequency).lower()
-        entities = []
-        
-        for term, label in [(experience, "EXPERIENCE"), (goal, "GOAL"), (body_part, "BODY_PART"), (equipment, "EQUIPMENT"), (frequency, "FREQUENCY")]:
-            start_idx = text.find(term)
-            if start_idx != -1:
-                end_idx = start_idx + len(term)
-                entities.append((start_idx, end_idx, label))
-        
-        if entities:
-            data.append((text, {"entities": entities}))
+# Load exercises database
+def load_exercise_data():
+    with open("exercices.json", "r") as f:
+        data = json.load(f)
+    print(f"Loaded data from exercices.json: {type(data)} with {len(data)} top-level items/keys.")
+    body_parts = sorted(set(ex["bodyParts"] for ex in data))
+    equipment = sorted(set(item for ex in data for item in ex["equipments"]))
+    print(f"Available body parts: {body_parts}")
+    print(f"Available equipment: {equipment}")
     return data
 
-TRAIN_DATA.extend(generate_training_data(110))
-
-# === NER Model Training ===
-
-def train_ner_model(train_data, output_path="gym_ner_model", n_iter=150):
-    nlp = spacy.blank("en")
-    if "ner" not in nlp.pipe_names:
-        ner = nlp.add_pipe("ner")
-    else:
-        ner = nlp.get_pipe("ner")
-    
-    for label in ["BODY_PART", "GOAL", "EQUIPMENT", "EXPERIENCE", "FREQUENCY"]:
-        ner.add_label(label)
-    
-    other_pipes = [pipe for pipe in nlp.pipe_names if pipe != "ner"]
-    with nlp.disable_pipes(*other_pipes):
-        optimizer = nlp.begin_training()
-        print("Training NER model...")
-        for itn in range(n_iter):
-            random.shuffle(train_data)
-            losses = {}
-            for text, annotations in train_data:
-                doc = nlp.make_doc(text)
-                example = Example.from_dict(doc, annotations)
-                nlp.update([example], drop=0.1, sgd=optimizer, losses=losses)
-            print(f"Iteration {itn+1}, Losses: {losses}")
-    
-    nlp.to_disk(output_path)
-    print(f"Model saved to {output_path}")
-    return nlp
-
-train_ner_model(TRAIN_DATA, output_path="gym_ner_model", n_iter=150)
-
-# === Chatbot Implementation ===
-
-nlp = spacy.load("gym_ner_model")
-
-API_URL = "https://exercisedb-api.vercel.app/api/v1/exercises?offset=0&limit=100"
-
-EXPERIENCE_MAP = {
-    "beginner": "beginner", "new": "beginner", "never": "beginner", "just starting": "beginner",
-    "don’t know how": "beginner", "first time": "beginner", "starting out": "beginner",
-    "no experience": "beginner", "easy": "beginner", "advanced": "advanced"
-}
-
-GOAL_MAP = {
-    "strength": ["upper arms", "upper legs", "waist", "chest"], "muscle": ["upper arms", "upper legs", "waist", "chest"],
-    "stronger": ["upper arms", "upper legs", "waist", "chest"], "weight loss": ["waist", "upper legs", "chest"],
-    "endurance": ["waist", "upper legs", "glutes"], "tone": ["upper arms", "waist", "chest"],
-    "fit": ["waist", "upper legs"], "look better": ["upper arms", "waist", "chest"],
-    "move better": ["glutes", "upper legs"], "not feel so tired": ["waist", "upper legs"],
-    "build muscle": ["upper arms", "upper legs", "waist", "chest"], "get in shape": ["waist", "upper legs", "chest"],
-    "feel more fit": ["waist", "upper legs"], "not feel so weak": ["upper arms", "waist", "chest"],
-    "muscle gain": ["upper arms", "upper legs", "waist", "chest"], "weight loss": ["waist", "upper legs", "chest"]
-}
-
-EQUIPMENT_MAP = {
-    "dumbbells": "dumbbell", "dumbbell": "dumbbell", "barbell": "barbell", "none": "body weight",
-    "no equipment": "body weight", "kettlebell": "kettlebell", "gym": None, "home": "body weight"
-}
-
-BODY_PART_MAP = {
-    "arms": "upper arms", "legs": "upper legs", "stomach": "waist", "tummy": "waist",
-    "back": "back", "whole body": ["upper arms", "upper legs", "waist", "back", "chest"],
-    "chest": "chest", "core": "waist"
-}
-
-FREQUENCY_MAP = {
-    "3 days a week": 3, "4 days per week": 4, "5 days a week": 5, "twice a week": 2, "every day": 7
-}
+exercises_db = load_exercise_data()
 
 def process_input(user_input, extracted_info):
-    user_input = user_input.lower().replace("at the gym", "gym").replace("the gym", "gym")
-    doc = nlp(user_input)
+    doc = nlp(user_input.lower())
+    print(f"Processed text: {doc.text}")
+    print(f"Tokens: {[token.text for token in doc]}")
     
-    print(f"Raw entities: {[(ent.text, ent.label_) for ent in doc.ents]}")
+    entities = [(ent.text, ent.label_, (ent.start_char, ent.end_char)) for ent in doc.ents]
+    print(f"Raw entities: {entities}")
+
     confirmation = None
-    for ent in doc.ents:
-        if ent.label_ == "EXPERIENCE" and not extracted_info["experience"]:
-            extracted_info["experience"] = EXPERIENCE_MAP.get(ent.text, "beginner")
-        elif ent.label_ == "GOAL" and not extracted_info["goal"]:
-            extracted_info["goal"] = ent.text.replace("want ", "") if ent.text.startswith("want ") else ent.text
-            extracted_info["goal"] = extracted_info["goal"] if extracted_info["goal"] in GOAL_MAP else "strength"
-        elif ent.label_ == "EQUIPMENT" and not extracted_info["equipment"] and ent.text != "home":
-            extracted_info["equipment"] = EQUIPMENT_MAP.get(ent.text, "body weight")
-        elif ent.label_ == "EQUIPMENT" and ent.text == "home" and extracted_info["equipment"] not in ["body weight", None]:
-            confirmation = "You mentioned home, but earlier said gym. Confirm home (body weight)?"
-        elif ent.label_ == "BODY_PART" and not extracted_info["muscle"]:
-            extracted_info["muscle"] = BODY_PART_MAP.get(ent.text, "upper arms")
-        elif ent.label_ == "FREQUENCY" and not extracted_info["frequency"]:
-            extracted_info["frequency"] = FREQUENCY_MAP.get(ent.text, 3)
-    
+
+    # Extract experience level
+    for ent_text, ent_label, _ in entities:
+        if ent_label == "EXPERIENCE":
+            if ent_text in ["beginner", "intermediate", "advanced"]:
+                extracted_info["experience"] = ent_text
+            break
+
+    # Extract goal
+    for ent_text, ent_label, _ in entities:
+        if ent_label == "GOAL":
+            goal_mapping = {
+                "tone": ["upper arms", "waist", "chest", "glutes", "shoulders", "upper legs"],
+                "build muscle": ["upper arms", "waist", "chest", "glutes", "shoulders", "upper legs"],
+                "get in shape": ["upper arms", "waist", "chest", "glutes", "shoulders", "upper legs"]
+            }
+            extracted_info["goal_targets"] = goal_mapping.get(ent_text, [])
+            extracted_info["goal_raw"] = ent_text
+            break
+
+    # Extract body part (muscle focus)
+    body_part_mapping = {
+        "legs": "upper legs",
+        "arms": "upper arms",
+        "back": "back",
+        "chest": "chest",
+        "shoulders": "shoulders",
+        "glutes": "glutes",
+        "waist": "waist",
+        "lower legs": "lower legs"
+    }
+    muscle = None
+    for ent_text, ent_label, _ in entities:
+        if ent_label == "BODY_PART":
+            muscle = body_part_mapping.get(ent_text, ent_text)
+            break
+
+    # If no specific body part is mentioned and goal is general (e.g., "get in shape"), set to full-body
+    if not muscle and extracted_info.get("goal_raw") in ["get in shape"]:
+        muscle = ["upper arms", "upper legs", "lower legs", "waist", "back", "chest", "shoulders", "glutes"]
+    elif muscle:
+        extracted_info["muscle"] = muscle
+    else:
+        extracted_info["muscle"] = "waist"  # Fallback, but should rarely be used now
+
+    # Extract equipment
+    equipment_mapping = {
+        "dumbbells": "dumbbell",
+        "barbell": "barbell",
+        "kettlebell": "kettlebell",
+        "resistance band": "resistance band",
+        "body weight": "body weight",
+        "home": "body weight"
+    }
+    for ent_text, ent_label, _ in entities:
+        if ent_label == "EQUIPMENT":
+            if ent_text == "home":
+                confirmation = "I see you mentioned 'at home'. Do you want a workout plan using only body weight (no equipment)?"
+            else:
+                equipment = equipment_mapping.get(ent_text, ent_text)
+                extracted_info["equipment"] = equipment
+            break
+
+    # Extract frequency
+    frequency = extract_frequency(entities)
+    if frequency:
+        extracted_info["frequency"] = frequency
+
+    print(f"Extracted info after processing: {extracted_info}")
     return extracted_info, confirmation
 
-def map_to_api_filters(extracted_info):
-    if isinstance(extracted_info["muscle"], list):
-        body_parts = extracted_info["muscle"]
-    else:
-        body_parts = [extracted_info["muscle"] if extracted_info["muscle"] else random.choice(GOAL_MAP.get(extracted_info["goal"], ["upper arms"]))]
-    filters = {"body_part": body_parts}
-    if extracted_info["equipment"]:
-        filters["equipment"] = extracted_info["equipment"]
-    return filters, extracted_info["experience"], extracted_info["frequency"]
+def extract_frequency(entities):
+    for ent_text, ent_label, _ in entities:
+        if ent_label == "FREQUENCY":
+            # Handle patterns like "X days a week"
+            if "days a week" in ent_text:
+                try:
+                    num_days = int(ent_text.split()[0])
+                    return num_days
+                except (ValueError, IndexError):
+                    print(f"Could not map frequency text: {ent_text}")
+                    return None
+            # Add more frequency patterns if needed
+    return None
 
-def get_workout(filters, experience, used_exercises, num_exercises=5):
-    try:
-        body_parts = filters['body_part'] if isinstance(filters['body_part'], list) else [filters['body_part']]
-        response = requests.get(API_URL, timeout=10)
-        print(f"API Response Status: {response.status_code}")
-        print(f"API Response Text: {response.text[:200]}...")
-        
-        if response.status_code == 200:
-            data = response.json()
-            if not isinstance(data, dict) or 'data' not in data or 'exercises' not in data['data']:
-                print(f"Error: Unexpected response format, got {type(data)}")
-                raise ValueError("Invalid API response format")
-            
-            exercises = data['data']['exercises']
-            if not isinstance(exercises, list):
-                print(f"Error: Expected a list of exercises, got {type(exercises)}")
-                raise ValueError("Exercises is not a list")
-            
-            filtered_exercises = []
-            # Try chest, fallback to upper arms
-            if 'chest' in body_parts:
-                chest_exercises = [ex for ex in exercises if 'chest' in [b.lower() for b in ex.get('bodyParts', [])]]
-                print(f"Chest exercises found: {len(chest_exercises)}")
-                if not chest_exercises:
-                    body_parts = ['upper arms' if bp == 'chest' else bp for bp in body_parts]
-            for ex in exercises:
-                matches = True
-                if any(bp.lower() in [b.lower() for b in ex.get('bodyParts', [])] for bp in body_parts):
-                    if filters.get('equipment') == 'body weight' and 'body weight' not in ex.get('equipments', []):
-                        matches = False
-                    elif filters.get('equipment') and filters['equipment'] != 'body weight' and filters['equipment'] not in ex.get('equipments', []):
-                        matches = False
-                    if ex['name'] in used_exercises:
-                        matches = False
-                    if matches:
-                        filtered_exercises.append(ex)
-            
-            if filtered_exercises:
-                random.shuffle(filtered_exercises)
-                routine = []
-                sets = 4 if experience == "advanced" else 3
-                reps = "12-15" if experience == "advanced" else "10"
-                equipment_note = " (use moderate weight)" if experience == "advanced" and filters.get('equipment') not in ["body weight", None] else ""
-                # For whole body, select one per body part
-                if isinstance(filters['body_part'], list):
-                    selected_parts = random.sample(body_parts, min(num_exercises, len(body_parts)))
-                    selected = []
-                    for part in selected_parts:
-                        for ex in filtered_exercises:
-                            if part.lower() in [b.lower() for b in ex.get('bodyParts', [])] and ex['name'] not in [s['name'] for s in selected]:
-                                selected.append(ex)
-                                break
-                else:
-                    selected = filtered_exercises[:num_exercises]
-                for ex in selected[:num_exercises]:
-                    desc = "\n    - ".join(ex.get('instructions', ["No instructions available."])[:5])
-                    routine.append(f"{ex['name'].title()} - {sets} sets of {reps} reps{equipment_note}\n    - {desc}")
-                    used_exercises.add(ex['name'])
-                return routine
-            
-            print("No exact matches, trying fallback...")
-            filtered_exercises = []
-            for ex in exercises:
-                if any(bp.lower() in [b.lower() for b in ex.get('bodyParts', [])] for bp in body_parts) and ex['name'] not in used_exercises:
-                    filtered_exercises.append(ex)
-            if filtered_exercises:
-                random.shuffle(filtered_exercises)
-                routine = []
-                sets = 4 if experience == "advanced" else 3
-                reps = "12-15" if experience == "advanced" else "10"
-                equipment_note = " (use moderate weight)" if experience == "advanced" and filters.get('equipment') not in ["body weight", None] else ""
-                selected = filtered_exercises[:num_exercises]
-                for ex in selected:
-                    desc = "\n    - ".join(ex.get('instructions', ["No instructions available."])[:5])
-                    routine.append(f"{ex['name'].title()} - {sets} sets of {reps} reps{equipment_note}\n    - {desc}")
-                    used_exercises.add(ex['name'])
-                return routine
-            
-            print("No exercises found in fallback.")
-        
-        routine = []
-        sets = 4 if experience == "advanced" else 3
-        reps = "12-15" if experience == "advanced" else "10"
-        body_part = random.choice(body_parts) if isinstance(body_parts, list) else body_parts
-        print(f"API failed: {response.status_code} - {response.text[:200]}...")
-        for i in range(1, num_exercises + 1):
-            routine.append(f"{body_part} Exercise {i} - {sets} sets of {reps} reps\n    - No instructions available.")
-        return routine
-    
-    except requests.RequestException as e:
-        print(f"API request failed: {e}")
-        routine = []
-        sets = 4 if experience == "advanced" else 3
-        reps = "12-15" if experience == "advanced" else "10"
-        body_part = random.choice(body_parts) if isinstance(body_parts, list) else body_parts
-        for i in range(1, num_exercises + 1):
-            routine.append(f"{body_part} Exercise {i} - {sets} sets of {reps} reps\n    - No instructions available.")
-        return routine
+def get_workout(filters, day, used_exercises):
+    focus = filters["focus"]
+    equipment = filters["equipment"]
+    experience = filters["experience"]
 
-def generate_weekly_plan(extracted_info, filters, experience, frequency):
-    workout_days = frequency if frequency else 3
-    plan = []
-    day_count = 1
-    used_exercises = set()
-    
-    for i in range(1, 8):
-        if day_count <= workout_days:
-            if i % 2 == 1 or (workout_days > 3 and i in [4, 6][:workout_days-3]):
-                exercises = get_workout(filters, experience, used_exercises, num_exercises=5)
-                plan.append(f"Day {i}: Workout\n  - " + "\n  - ".join(exercises))
-                day_count += 1
-            else:
-                plan.append(f"Day {i}: Rest")
+    # Load exercises for each day to ensure fresh data
+    exercises = load_exercise_data()
+
+    # Convert focus to list if it's a single string
+    focus_list = focus if isinstance(focus, list) else [focus]
+
+    # Filter exercises
+    matching_exercises = []
+    for ex in exercises:
+        # Check if the exercise targets the focus body part
+        if ex["bodyParts"] in focus_list:
+            # Check equipment match (since equipments is a list, check if the requested equipment is in the list)
+            if equipment and equipment not in ex["equipments"]:
+                continue
+            # Filter by difficulty based on experience level
+            if experience == "beginner" and ex.get("difficulty") == "advanced":
+                continue
+            if experience == "advanced" and ex.get("difficulty") == "beginner":
+                continue
+            matching_exercises.append(ex)
+
+    print(f"Filtering for focus: {focus}, required equipment: {equipment}")
+    print(f"Filtered to {len(matching_exercises)} exercises matching criteria.")
+
+    # Select up to 5 exercises, avoiding over-repetition within the same day
+    selected_exercises = []
+    day_used_exercises = set()
+    random.shuffle(matching_exercises)
+
+    for ex in matching_exercises:
+        ex_name = ex["name"]
+        # Allow some reuse across days, but not within the same day
+        if ex_name not in day_used_exercises and len(selected_exercises) < 5:
+            selected_exercises.append(ex)
+            day_used_exercises.add(ex_name)
+
+    return selected_exercises, day_used_exercises
+
+def generate_workout_plan(extracted_info):
+    if extracted_info.get("frequency") is None:
+        raise ValueError("Frequency is not set in extracted_info")
+
+    frequency = extracted_info["frequency"]
+    experience = extracted_info["experience"]
+    equipment = extracted_info["equipment"]
+    muscle = extracted_info["muscle"]
+    goal = extracted_info["goal_raw"]
+
+    print("-" * 30)
+    print(f"Experience: {experience.title()}")
+    print(f"Goal: {goal}")
+    print(f"Focus: {muscle.title() if isinstance(muscle, str) else 'Full Body'}")
+    print(f"Equipment: {equipment if equipment else 'various (gym)'}")
+    print(f"Frequency: {frequency} days/week")
+    print("-" * 30)
+
+    workout_days = min(frequency, 7)
+    workout_schedule = []
+
+    for day in range(1, 8):
+        if len(workout_schedule) < workout_days:
+            workout_schedule.append(day)
         else:
-            plan.append(f"Day {i}: Rest")
-    
+            workout_schedule.append(None)
+
+    random.shuffle(workout_schedule)
+
+    plan = []
+    filters = {
+        "focus": muscle,
+        "equipment": equipment,
+        "experience": experience
+    }
+    used_exercises = set()  # Track exercises across all days, but allow reuse with modification
+
+    # Add warm-up and cool-down templates
+    warm_up = "Warm-Up: 5 minutes of Jumping Jacks\n  - Instructions:\n    1. Stand with feet together, arms at sides.\n    2. Jump while raising arms overhead and spreading legs.\n    3. Jump back to starting position.\n    4. Repeat at a moderate pace."
+    cool_down = "Cool-Down: 5 minutes of Static Stretching\n  - Instructions:\n    1. Hamstring Stretch: Sit with one leg extended, reach towards toes, hold 30s per side.\n    2. Quad Stretch: Stand, pull one foot to glutes, hold 30s per side.\n    3. Arm Stretch: Cross one arm over body, pull with opposite hand, hold 30s per side."
+
+    for day in range(1, 8):
+        print(f"Generating workout for Day {day}...")
+        if day in workout_schedule:
+            # Reset used_exercises each day to allow reuse, or limit tracking to avoid overuse
+            day_used_exercises = set()  # Track only within the day
+            exercises, updated_used_exercises = get_workout(filters, day, used_exercises)
+            workout = f"Day {day}: Workout\n"
+            workout += f"  {warm_up}\n"
+            if not exercises:
+                workout += "  - No suitable exercises found for this day.\n"
+            else:
+                for ex in exercises:
+                    workout += f"  - {ex['name'].title()}: 3 sets of 8-12 reps\n"  # Hardcoding sets/reps since not in JSON
+                    workout += "    Instructions:\n"
+                    for idx, step in enumerate(ex['instructions'], 1):
+                        workout += f"      {idx}. {step}\n"
+            workout += f"  {cool_down}\n"
+            plan.append(workout)
+            used_exercises.update(day_used_exercises)  # Update global tracking, but less restrictive
+        else:
+            plan.append(f"Day {day}: Rest")
+
+    # Add progression tip
+    plan.append("\nProgression Tip: Increase reps by 1-2 each week as you get stronger.")
     return "\n".join(plan)
 
-def main():
-    print("Welcome to your Gym Workout Chatbot! How can I help you? Please tell us your goal.")
-    
-    extracted_info = {"experience": None, "goal": None, "equipment": None, "muscle": None, "frequency": None}
-    
+def chatbot():
+    print("Welcome to the Workout Chatbot!")
+    print("Tell me about your fitness goals, experience level, and any equipment you have.")
+    print("For example: 'I’m a beginner and want to tone my legs at home 3 days a week.'")
+    print("Type 'exit' to quit.\n")
+
+    extracted_info = {}
+    confirmation_pending = None
+    user_response = None
+
     while True:
-        user_input = input("You: ").strip()
-        if user_input.lower() in ["exit", "quit"]:
-            print("Goodbye!")
-            break
-        
-        extracted_info, confirmation = process_input(user_input, extracted_info)
-        if confirmation:
-            print(confirmation)
-            user_input = input("You: ").strip()
-            if user_input.lower() in ["yes", "home"]:
+        if confirmation_pending:
+            print(confirmation_pending)
+            user_response = input("Please confirm (yes/no): ").strip().lower()
+            if user_response == "yes":
                 extracted_info["equipment"] = "body weight"
+                confirmation_pending = None
+            elif user_response == "no":
+                confirmation_pending = None
             else:
-                print("Okay, sticking with gym or equipment.")
-            continue
-        
-        if not extracted_info["experience"]:
-            print("Okay, got it! Are you a beginner, advanced, or somewhere else in your fitness level?")
-            continue
-        if not extracted_info["goal"]:
-            print("Okay, got it! Could you specify your goal (e.g., weight loss, muscle gain, get stronger)?")
-            continue
-        if not extracted_info["muscle"] or extracted_info["muscle"] not in BODY_PART_MAP.values():
-            print("Okay, got it! Which muscle group do you want to focus on (e.g., arms, legs, whole body)?")
-            continue
-        if not extracted_info["frequency"]:
-            print("Okay, got it! How many days per week can you work out (e.g., 3 days a week)?")
-            continue
-        if not extracted_info["equipment"]:
-            print("Okay, got it! Will you be working out at home, the gym, or using equipment like dumbbells?")
-            continue
-        
-        print("Okay, got it!")
-        filters, experience, frequency = map_to_api_filters(extracted_info)
-        print(f"Here's your detailed workout plan:")
-        plan = generate_weekly_plan(extracted_info, filters, experience, frequency)
-        print(plan)
-        print("\nWant another plan? Just tell me your goal, or type 'exit' to quit.")
-        extracted_info = {"experience": None, "goal": None, "equipment": None, "muscle": None, "frequency": None}
-    
-    print("\nTesting NER model on sample inputs...")
-    test_inputs = [
-        "i’m new and want to tone my arms at home.",
-        "i’ve never exercised, want my legs to look better.",
-        "i’m new to the gym, want to get stronger.",
-        "i’m advanced, want muscle gain in my chest at the gym 5 days a week.",
-        "beginner here, want weight loss, no equipment, 4 days a week."
-    ]
-    for text in test_inputs:
-        doc = nlp(text.lower().replace("at the gym", "gym").replace("the gym", "gym"))
-        print(f"Input: {text}")
-        print(f"Entities: {[(ent.text, ent.label_) for ent in doc.ents]}")
+                print("Please respond with 'yes' or 'no'.")
+                continue
+
+        if not confirmation_pending:
+            user_input = input("You: ").strip()
+            if user_input.lower() == "exit":
+                print("Goodbye!")
+                break
+
+            extracted_info, confirmation = process_input(user_input, extracted_info)
+
+            if confirmation:
+                confirmation_pending = confirmation
+                continue
+
+            print("Bot: Okay, got all the info! Generating your plan...")
+            try:
+                workout_plan = generate_workout_plan(extracted_info)
+                print(workout_plan)
+            except Exception as e:
+                print(f"Bot: Sorry, I encountered an error: {e}")
+                print("Please try again with a different input.")
 
 if __name__ == "__main__":
-    main()
+    chatbot()
