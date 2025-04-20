@@ -119,11 +119,6 @@ def load_exercise_data():
         raise FileNotFoundError("exercices.json not found. Please ensure the file exists in the working directory.")
     except json.JSONDecodeError:
         raise ValueError("exercices.json is malformed. Please ensure it contains valid JSON.")
-    print(f"Loaded data from exercices.json: {type(data)} with {len(data)} top-level items/keys.")
-    body_parts = sorted(set(part for ex in data for part in ex["bodyParts"]))
-    equipment = sorted(set(item for ex in data for item in ex["equipments"]))
-    print(f"Available body parts: {body_parts}")
-    print(f"Available equipment: {equipment}")
     return data
 
 exercises_db = load_exercise_data()
@@ -140,12 +135,8 @@ def process_input(user_input, extracted_info):
     processed_text = processed_text.replace("i’m", "i'm")
     doc = nlp(processed_text)
 
-    print(f"Processed text: {doc.text}")
-    print(f"Tokens: {[token.text for token in doc]}")
-    
     # Extract entities
     entities = [(ent.text, ent.label_, (ent.start_char, ent.end_char)) for ent in doc.ents]
-    print(f"Raw entities: {entities}")
 
     confirmation = None
     equipment_extracted = False
@@ -160,8 +151,6 @@ def process_input(user_input, extracted_info):
         elif ent_label == "EQUIPMENT" and ent_text in ["beginner", "intermediate", "advanced", "new"]:
             ent_label = "EXPERIENCE"
         corrected_entities.append((ent_text, ent_label, span))
-
-    print(f"Corrected entities: {corrected_entities}")
 
     # Extract experience level
     for ent_text, ent_label, _ in corrected_entities:
@@ -238,9 +227,9 @@ def process_input(user_input, extracted_info):
             equipment_extracted = True
             if ent_text in ["home", "no equipment", "none", "nothing", "no gear", "bodyweight"] and mapped_equip == "body weight":
                 if extracted_info.get("equipment") not in [None, "body weight"]:
-                    confirmation = f"You mentioned '{ent_text}' (body weight) but previously specified other equipment ('{extracted_info['equipment']}'). Use body weight only?"
+                    confirmation = f"You mentioned '{ent_text}' (body weight) but previously specified other equipment ('{extracted_info['equipment']}'). Use body weight only? 🤔"
                 else:
-                    confirmation = f"I see you mentioned '{ent_text}'. Do you want a workout plan using only body weight (no equipment)?"
+                    confirmation = f"I see you mentioned '{ent_text}'. Do you want a workout plan using only body weight (no equipment)? 🤔"
             elif ent_text in ["gym", "at_the_gym"] or mapped_equip is None:
                 extracted_info["equipment"] = None
             else:
@@ -252,9 +241,9 @@ def process_input(user_input, extracted_info):
             if eq in user_input_lower:
                 if eq in ["home", "no equipment", "none", "nothing", "no gear", "bodyweight"] and mapped_eq == "body weight":
                     if extracted_info.get("equipment") not in [None, "body weight"]:
-                        confirmation = f"You mentioned '{eq}' (body weight) but previously specified other equipment ('{extracted_info['equipment']}'). Use body weight only?"
+                        confirmation = f"You mentioned '{eq}' (body weight) but previously specified other equipment ('{extracted_info['equipment']}'). Use body weight only? 🤔"
                     else:
-                        confirmation = f"I see you mentioned '{eq}'. Do you want a workout plan using only body weight (no equipment)?"
+                        confirmation = f"I see you mentioned '{eq}'. Do you want a workout plan using only body weight (no equipment)? 🤔"
                 elif eq in ["gym", "at_the_gym"] or mapped_eq is None:
                     extracted_info["equipment"] = None
                 else:
@@ -266,7 +255,6 @@ def process_input(user_input, extracted_info):
     if frequency:
         extracted_info["frequency"] = frequency
 
-    print(f"Extracted info after processing: {extracted_info}")
     return extracted_info, confirmation
 
 def extract_frequency(entities):
@@ -281,7 +269,6 @@ def extract_frequency(entities):
                         num_days = int(ent_text.split("days per week")[0].strip())
                     return num_days
                 except (ValueError, IndexError):
-                    print(f"Could not map frequency text: {ent_text}")
                     return None
     return None
 
@@ -305,9 +292,6 @@ def get_workout(filters, day, used_exercises):
                 continue
             matching_exercises.append(ex)
 
-    print(f"Filtering for focus: {focus}, required equipment: {equipment}")
-    print(f"Filtered to {len(matching_exercises)} exercises matching criteria.")
-
     # Step 2: Select up to 5 exercises with the specified equipment
     selected_exercises = []
     day_used_exercises = set()
@@ -324,7 +308,6 @@ def get_workout(filters, day, used_exercises):
 
     # Step 3: If fewer than 5 exercises, supplement with body weight exercises
     if len(selected_exercises) < 5 and equipment is not None:  # Only supplement if equipment was specified
-        print(f"Only {len(selected_exercises)} exercises found with equipment '{equipment}'. Supplementing with body weight exercises.")
         body_weight_exercises = []
         for ex in exercises:
             if any(part in focus_list for part in ex["bodyParts"]):
@@ -351,8 +334,6 @@ def get_workout(filters, day, used_exercises):
                     day_used_exercises.add(ex_name)
                     used_exercises[ex_name] = used_exercises.get(ex_name, 0) + 1
 
-        print(f"After supplementing, total exercises: {len(selected_exercises)}")
-
     return selected_exercises, day_used_exercises
 
 def generate_workout_plan(extracted_info):
@@ -370,14 +351,6 @@ def generate_workout_plan(extracted_info):
     equipment = extracted_info["equipment"]
     muscle = extracted_info["muscle"]
     goal = extracted_info["goal_raw"]
-
-    print("-" * 30)
-    print(f"Experience: {experience.title()}")
-    print(f"Goal: {goal}")
-    print(f"Focus: {muscle.title() if isinstance(muscle, str) else 'Full Body'}")
-    print(f"Equipment: {equipment if equipment else 'various (gym)'}")
-    print(f"Frequency: {frequency} days per week")
-    print("-" * 30)
 
     workout_days = min(frequency, 7)
     workout_schedule = [None] * 7  # Initialize a 7-day schedule with None (rest days)
@@ -406,15 +379,14 @@ def generate_workout_plan(extracted_info):
     }
     used_exercises = {}
 
-    warm_up = "Warm-Up: 5 minutes of Jumping Jacks\n  - Instructions:\n    1. Stand with feet together, arms at sides.\n    2. Jump while raising arms overhead and spreading legs.\n    3. Jump back to starting position.\n    4. Repeat at a moderate pace."
-    cool_down = "Cool-Down: 5 minutes of Static Stretching\n  - Instructions:\n    1. Hamstring Stretch: Sit with one leg extended, reach towards toes, hold 30s per side.\n    2. Quad Stretch: Stand, pull one foot to glutes, hold 30s per side.\n    3. Arm Stretch: Cross one arm over body, pull with opposite hand, hold 30s per side."
+    warm_up = "Warm-Up: 5 minutes of Jumping Jacks 🏃\n  - Instructions:\n    1. Stand with feet together, arms at sides.\n    2. Jump while raising arms overhead and spreading legs.\n    3. Jump back to starting position.\n    4. Repeat at a moderate pace."
+    cool_down = "Cool-Down: 5 minutes of Static Stretching 🧘\n  - Instructions:\n    1. Hamstring Stretch: Sit with one leg extended, reach towards toes, hold 30s per side.\n    2. Quad Stretch: Stand, pull one foot to glutes, hold 30s per side.\n    3. Arm Stretch: Cross one arm over body, pull with opposite hand, hold 30s per side."
 
     for day in range(1, 8):
-        print(f"Generating workout for Day {day}...")
         if workout_schedule[day - 1] is not None:
             day_used_exercises = set()
             exercises, updated_used_exercises = get_workout(filters, day, used_exercises)
-            workout = f"Day {day}: Workout\n"
+            workout = f"Day {day}: Workout 💪\n"
             workout += f"  {warm_up}\n"
 
             # Track if body weight exercises were used as a fallback
@@ -425,38 +397,38 @@ def generate_workout_plan(extracted_info):
                     break
 
             if not exercises:
-                workout += "  - No suitable exercises found for this day, even with body weight fallback.\n"
+                workout += "  - No suitable exercises found for this day, even with body weight fallback. 😔\n"
             else:
                 for ex in exercises:
-                    workout += f"  - {ex['name'].title()}: 3 sets of 8-12 reps\n"
+                    workout += f"  - {ex['name'].title()}: 3 sets of 8-12 reps 🏋️\n"
                     workout += "    Instructions:\n"
                     for idx, step in enumerate(ex['instructions'], 1):
                         workout += f"      {idx}. {step}\n"
 
             # Add a note if body weight exercises were used as a fallback
             if used_body_weight_fallback:
-                workout += f"  Note: Not enough exercises were found using '{equipment}'. Added body weight exercises to complete the workout.\n"
+                workout += f"  Note: Not enough exercises were found using '{equipment}'. Added body weight exercises to complete the workout. 🏃\n"
 
             workout += f"  {cool_down}\n"
             plan.append(workout)
         else:
-            plan.append(f"Day {day}: Rest")
+            plan.append(f"Day {day}: Rest 😴")
 
-    plan.append("\nProgression Tip: Increase reps by 1-2 each week as you get stronger.")
+    plan.append("\nProgression Tip: Increase reps by 1-2 each week as you get stronger! 📈")
     return "\n".join(plan)
 
 def chatbot():
-    print("Welcome to the Workout Chatbot!")
-    print("Tell me about your fitness goals, experience level, and any equipment you have.")
+    print("Welcome to the Workout Chatbot! 🏋️‍♀️")
+    print("Let’s get you a workout plan! Tell me about your fitness goals, experience level, and any equipment you have. 🎯")
     print("For example: 'I’m a beginner and want to tone my legs at home 3 days per week.'")
-    print("Type 'exit' to quit.\n")
+    print("Type 'exit' to quit. 🚪\n")
 
     extracted_info = {}
 
     while True:
         user_input = input("You: ").strip()
         if user_input.lower() == "exit":
-            print("Goodbye!")
+            print("Bot: Goodbye! Stay fit! 👋")
             break
 
         extracted_info = {}
@@ -464,15 +436,17 @@ def chatbot():
 
         # Handle equipment confirmation for "at home" or similar
         if confirmation:
-            print(confirmation)
+            print(f"Bot: {confirmation}")
             user_response = input("Please confirm (yes/no): ").strip().lower()
             if user_response == "yes":
                 extracted_info["equipment"] = "body weight"
+                print("Bot: Got it! Using body weight only. ✅")
             elif user_response == "no":
-                print("Please specify any equipment you have (e.g., dumbbells, resistance band, kettlebell), or confirm you want a body weight workout.")
+                print("Bot: Please specify any equipment you have (e.g., dumbbells, resistance band, kettlebell), or confirm you want a body weight workout. 🏋️")
                 user_response = input("You: ").strip().lower()
                 if user_response == "yes":
                     extracted_info["equipment"] = "body weight"
+                    print("Bot: Got it! Using body weight only. ✅")
                 else:
                     found_equipment = None
                     for eq, mapped_eq in EQUIPMENT_MAP.items():
@@ -481,14 +455,16 @@ def chatbot():
                             break
                     if found_equipment:
                         extracted_info["equipment"] = found_equipment
+                        print(f"Bot: Great, I’ll use {found_equipment} for your workout! ✅")
                     else:
-                        print("Bot: I couldn't recognize the equipment. Defaulting to 'body weight'.")
+                        print("Bot: I couldn’t recognize the equipment. Defaulting to body weight. 🏃")
                         extracted_info["equipment"] = "body weight"
             else:
-                print("Please specify any equipment you have (e.g., dumbbells, resistance band, kettlebell), or confirm you want a body weight workout.")
+                print("Bot: Please specify any equipment you have (e.g., dumbbells, resistance band, kettlebell), or confirm you want a body weight workout. 🏋️")
                 user_response = input("You: ").strip().lower()
                 if user_response == "yes":
                     extracted_info["equipment"] = "body weight"
+                    print("Bot: Got it! Using body weight only. ✅")
                 else:
                     found_equipment = None
                     for eq, mapped_eq in EQUIPMENT_MAP.items():
@@ -497,13 +473,14 @@ def chatbot():
                             break
                     if found_equipment:
                         extracted_info["equipment"] = found_equipment
+                        print(f"Bot: Great, I’ll use {found_equipment} for your workout! ✅")
                     else:
-                        print("Bot: I couldn't recognize the equipment. Defaulting to 'body weight'.")
+                        print("Bot: I couldn’t recognize the equipment. Defaulting to body weight. 🏃")
                         extracted_info["equipment"] = "body weight"
 
         # Prompt for missing entities
         if "experience" not in extracted_info:
-            print("Bot: What is your experience level? (e.g., 'beginner', 'intermediate', 'advanced')")
+            print("Bot: What’s your experience level? (e.g., beginner, intermediate, advanced) ❓")
             user_response = input("You: ").strip()
             user_input_lower = user_response.lower()
             for exp in ["beginner", "intermediate", "advanced", "new"]:
@@ -511,11 +488,11 @@ def chatbot():
                     extracted_info["experience"] = "beginner" if exp == "new" else exp
                     break
             if "experience" not in extracted_info:
-                print("Bot: I couldn't understand your experience level. Defaulting to 'beginner'.")
+                print("Bot: I couldn’t understand your experience level. Defaulting to beginner. 👶")
                 extracted_info["experience"] = "beginner"
 
         if "goal_raw" not in extracted_info:
-            print("Bot: What is your fitness goal? (e.g., 'tone', 'muscle gain', 'get in shape')")
+            print("Bot: What’s your fitness goal? (e.g., tone, muscle gain, get in shape) ❓")
             user_response = input("You: ").strip()
             user_input_lower = user_response.lower()
             goal_mapping = {
@@ -533,12 +510,12 @@ def chatbot():
                     extracted_info["goal_raw"] = goal
                     break
             if "goal_raw" not in extracted_info:
-                print("Bot: I couldn't understand your goal. Defaulting to 'get in shape'.")
+                print("Bot: I couldn’t understand your goal. Defaulting to 'get in shape'. 🏃")
                 extracted_info["goal_raw"] = "get in shape"
                 extracted_info["goal_targets"] = goal_mapping["get in shape"]
 
         if "frequency" not in extracted_info:
-            print("Bot: How often do you want to train per week? (e.g., '3 days per week')")
+            print("Bot: How often do you want to train per week? (e.g., 3 days per week) ❓")
             user_response = input("You: ").strip()
             doc = nlp(user_response.lower())
             entities = [(ent.text, ent.label_, (ent.start_char, ent.end_char)) for ent in doc.ents]
@@ -546,25 +523,27 @@ def chatbot():
             if frequency:
                 extracted_info["frequency"] = frequency
             else:
-                print("Bot: I couldn't understand the frequency. Defaulting to 3 days per week.")
+                print("Bot: I couldn’t understand the frequency. Defaulting to 3 days per week. 📅")
                 extracted_info["frequency"] = 3
 
         if "equipment" not in extracted_info:
-            print("Bot: What equipment do you have access to? (e.g., 'dumbbells', 'at home', 'gym')")
+            print("Bot: What equipment do you have access to? (e.g., dumbbells, at home, gym) ❓")
             user_response = input("You: ").strip()
             user_input_lower = user_response.lower()
             for eq, mapped_eq in EQUIPMENT_MAP.items():
                 if eq in user_input_lower:
                     if eq in ["home", "no equipment", "none", "nothing", "no gear", "bodyweight"]:
-                        print(f"I see you mentioned '{eq}'. Do you want a workout plan using only body weight (no equipment)?")
+                        print(f"Bot: I see you mentioned '{eq}'. Do you want a workout plan using only body weight (no equipment)? 🤔")
                         confirm_response = input("Please confirm (yes/no): ").strip().lower()
                         if confirm_response == "yes":
                             extracted_info["equipment"] = "body weight"
+                            print("Bot: Got it! Using body weight only. ✅")
                         elif confirm_response == "no":
-                            print("Please specify any equipment you have (e.g., dumbbells, resistance band, kettlebell), or confirm you want a body weight workout.")
+                            print("Bot: Please specify any equipment you have (e.g., dumbbells, resistance band, kettlebell), or confirm you want a body weight workout. 🏋️")
                             user_response = input("You: ").strip().lower()
                             if user_response == "yes":
                                 extracted_info["equipment"] = "body weight"
+                                print("Bot: Got it! Using body weight only. ✅")
                             else:
                                 found_equipment = None
                                 for eq2, mapped_eq2 in EQUIPMENT_MAP.items():
@@ -573,14 +552,16 @@ def chatbot():
                                         break
                                 if found_equipment:
                                     extracted_info["equipment"] = found_equipment
+                                    print(f"Bot: Great, I’ll use {found_equipment} for your workout! ✅")
                                 else:
-                                    print("Bot: I couldn't recognize the equipment. Defaulting to 'body weight'.")
+                                    print("Bot: I couldn’t recognize the equipment. Defaulting to body weight. 🏃")
                                     extracted_info["equipment"] = "body weight"
                         else:
-                            print("Please specify any equipment you have (e.g., dumbbells, resistance band, kettlebell), or confirm you want a body weight workout.")
+                            print("Bot: Please specify any equipment you have (e.g., dumbbells, resistance band, kettlebell), or confirm you want a body weight workout. 🏋️")
                             user_response = input("You: ").strip().lower()
                             if user_response == "yes":
                                 extracted_info["equipment"] = "body weight"
+                                print("Bot: Got it! Using body weight only. ✅")
                             else:
                                 found_equipment = None
                                 for eq2, mapped_eq2 in EQUIPMENT_MAP.items():
@@ -589,23 +570,26 @@ def chatbot():
                                         break
                                 if found_equipment:
                                     extracted_info["equipment"] = found_equipment
+                                    print(f"Bot: Great, I’ll use {found_equipment} for your workout! ✅")
                                 else:
-                                    print("Bot: I couldn't recognize the equipment. Defaulting to 'body weight'.")
+                                    print("Bot: I couldn’t recognize the equipment. Defaulting to body weight. 🏃")
                                     extracted_info["equipment"] = "body weight"
                     else:
                         extracted_info["equipment"] = mapped_eq
+                        print(f"Bot: Great, I’ll use {mapped_eq} for your workout! ✅")
                     break
             if "equipment" not in extracted_info:
-                print("Bot: I couldn't understand the equipment. Defaulting to 'body weight'.")
+                print("Bot: I couldn’t understand the equipment. Defaulting to body weight. 🏃")
                 extracted_info["equipment"] = "body weight"
 
-        print("Bot: Okay, got all the info! Generating your plan...")
+        print("Bot: Okay, I’ve got all the info! Generating your plan... 🏋️‍♀️")
         try:
             workout_plan = generate_workout_plan(extracted_info)
+            print("Bot: Here’s your workout plan! 🎉")
             print(workout_plan)
             extracted_info = {}
         except Exception as e:
-            print(f"Bot: Sorry, I encountered an error: {e}")
+            print(f"Bot: Sorry, I encountered an error: {e} 😔")
             print("Please try again with a different input.")
 
 if __name__ == "__main__":
